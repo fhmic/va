@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VA — Your AI Mentor",
-  description: "An AI mentor that remembers you, adapts to you, and tracks your growth.",
+  title: "VAM - Your Vocal Acuity Mentor",
+  description: "VAM train you professional presentation skill, tracks your progress over time, and tracks your growth.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
