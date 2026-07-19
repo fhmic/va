@@ -72,7 +72,7 @@ Voice/Progress build:
 | Memory ranking (importance x recency) | `unit/memory-ranking.test.ts`         |
 | Progress day-streak computation | `unit/progress-streak.test.ts`              |
 
-Not covered by automated tests (see `docs/STAGE-2-NOTES.md` for why):
+Not covered by automated tests (see `docs/STAGE-2-3-4-NOTES.md` for why):
 any real Groq API call, `/api/chat`'s SSE proxying end-to-end, voice
 recording/playback (jsdom doesn't implement `MediaRecorder`/`Audio`).
 
