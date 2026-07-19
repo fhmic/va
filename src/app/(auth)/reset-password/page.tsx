@@ -20,8 +20,9 @@ export default function ResetPasswordPage() {
     setError(null);
     setIsLoading(true);
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?type=recovery`,
+      redirectTo: `${appUrl}/auth/callback?type=recovery`,
     });
 
     setIsLoading(false);

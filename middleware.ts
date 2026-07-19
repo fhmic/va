@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const AUTH_ROUTES = ["/sign-in", "/sign-up", "/reset-password", "/auth/callback"];
+const AUTH_ROUTES = ["/sign-in", "/sign-up", "/reset-password", "/update-password", "/auth/callback"];
 const PUBLIC_ROUTES = ["/"];
 // /legal/* (document text) must stay reachable while a user is stuck on
 // the re-accept gate — otherwise they can't open the very documents
@@ -23,8 +23,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Signed in and hitting an auth route -> send to dashboard
-  if (user && isAuthRoute) {
+  // Signed in and hitting an auth route -> send to dashboard, except for
+  // the password update screen used immediately after a recovery link
+  if (user && isAuthRoute && pathname !== "/update-password") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

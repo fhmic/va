@@ -22,12 +22,13 @@ export default function SignUpPage() {
     setError(null);
     setIsLoading(true);
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+        emailRedirectTo: `${appUrl}/auth/callback`,
       },
     });
 
@@ -43,9 +44,10 @@ export default function SignUpPage() {
 
   async function handleGoogleSignUp() {
     setError(null);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback` },
+      options: { redirectTo: `${appUrl}/auth/callback` },
     });
     if (oauthError) setError(oauthError.message);
   }

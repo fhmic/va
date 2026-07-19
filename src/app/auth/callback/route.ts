@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { handleAuthCallback } from "@/lib/supabase/auth-callback";
 
 /**
  * Handles the redirect back from Supabase Auth after:
  *  - Google OAuth sign-in
  *  - Email confirmation link
  *  - Password recovery link
- * Exchanges the `code` param for a session, then routes the user
- * onward. Middleware takes over from here for onboarding gating.
+ * Exchanges the `code` param (or token hash for recovery links) for a session,
+ * then routes the user onward. Middleware takes over from here for onboarding gating.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("type") === "recovery" ? "/settings/profile" : "/dashboard";
+  const supabase = await createClient();
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const nextPath = await handleAuthCallback({
+    origin,
+    searchParams,
+    exchangeCodeForSession: (code) => supabase.auth.exchangeCodeForSession(code),
+    verifyOtp: (params) => supabase.auth.verifyOtp(params),
+  });
 
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
-    }
-  }
-
-  return NextResponse.redirect(`${origin}/sign-in?error=auth_callback_failed`);
+  return NextResponse.redirect(`${origin}${nextPath}`);
 }

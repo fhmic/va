@@ -49,9 +49,10 @@ export function SignInForm() {
 
   async function handleGoogleSignIn() {
     setError(null);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback` },
+      options: { redirectTo: `${appUrl}/auth/callback` },
     });
     if (oauthError) setError(oauthError.message);
   }
