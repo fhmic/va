@@ -5,7 +5,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-6">
-        <span className="text-lg font-semibold text-slate-900">VA</span>
+        <span className="text-lg font-semibold text-slate-900">VAM-AI</span>
         <nav className="flex items-center gap-3">
           <Link href="/sign-in" className="text-sm font-medium text-slate-600 hover:text-slate-900">
             Sign in
