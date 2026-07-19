@@ -11,14 +11,24 @@ import { handleAuthCallback } from "@/lib/supabase/auth-callback";
  * then routes the user onward. Middleware takes over from here for onboarding gating.
  */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const url = new URL(request.url);
+  const { origin } = url;
+  const searchParams = new URLSearchParams(url.search);
+  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+
+  if (hash) {
+    const hashParams = new URLSearchParams(hash);
+    for (const [key, value] of hashParams.entries()) {
+      searchParams.set(key, value);
+    }
+  }
+
   const supabase = await createClient();
 
   const nextPath = await handleAuthCallback({
-    origin,
     searchParams,
     exchangeCodeForSession: (code) => supabase.auth.exchangeCodeForSession(code),
-    verifyOtp: (params) => supabase.auth.verifyOtp(params),
+    setSession: (params) => supabase.auth.setSession(params),
   });
 
   return NextResponse.redirect(`${origin}${nextPath}`);
