@@ -3,7 +3,7 @@
 #
 # Runs after CI is green on main (via workflow_run, so it never deploys
 # a commit that failed lint/typecheck/test/build) and pushes any pending
-# migrations in supabase/migrations/*.sql to the linked Supabase project,
+# migrations in supabase/migrations/*.sql to the linked Supabase projects,
 # closing the gap called out in the CTO review: migrations previously
 # had to be applied manually (`supabase db push --linked` run by a human,
 # whenever someone remembered), which is exactly how GitHub, Vercel, and
