@@ -1,7 +1,7 @@
 # Automated Supabase Migration Deployment — CTO Review Foundation
 # Hardening Change #5.
 #
-# Runs after CI is green on main (via workflow_run, so it never deploys
+# Runs after CI is green on main (via workflow_run, so it never deploy
 # a commit that failed lint/typecheck/test/build) and pushes any pending
 # migrations in supabase/migrations/*.sql to the linked Supabase projects,
 # closing the gap called out in the CTO review: migrations previously
