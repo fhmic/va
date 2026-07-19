@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * Records activity-derived metrics (source: 'activity') after each chat
  * turn. Assessment-derived snapshots (source: 'assessment') are not
- * part of Stage 2 — see docs/STAGE-2-NOTES.md — the schema already
+ * part of Stage 2 — see docs/STAGE-2-3-4-NOTES.md — the schema already
  * distinguishes the two so adding that source later needs no migration.
  *
  * Two metrics for now, deliberately simple:

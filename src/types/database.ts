@@ -428,6 +428,9 @@ export interface Database {
           title: string;
           description: string | null;
           status: "active" | "paused" | "completed" | "abandoned";
+          target_date: string | null;
+          priority: "low" | "medium" | "high";
+          category: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -437,6 +440,9 @@ export interface Database {
           title: string;
           description?: string | null;
           status?: "active" | "paused" | "completed" | "abandoned";
+          target_date?: string | null;
+          priority?: "low" | "medium" | "high";
+          category?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -446,6 +452,9 @@ export interface Database {
           title?: string;
           description?: string | null;
           status?: "active" | "paused" | "completed" | "abandoned";
+          target_date?: string | null;
+          priority?: "low" | "medium" | "high";
+          category?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -489,6 +498,312 @@ export interface Database {
           },
         ];
       };
+      action_plans: {
+        Row: {
+          id: string;
+          user_id: string;
+          goal_id: string | null;
+          week_start_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          goal_id?: string | null;
+          week_start_date: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          goal_id?: string | null;
+          week_start_date?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "action_plans_goal_id_fkey";
+            columns: ["goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      action_plan_items: {
+        Row: {
+          id: string;
+          action_plan_id: string;
+          user_id: string;
+          title: string;
+          is_ai_suggested: boolean;
+          is_completed: boolean;
+          completed_at: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          action_plan_id: string;
+          user_id: string;
+          title: string;
+          is_ai_suggested?: boolean;
+          is_completed?: boolean;
+          completed_at?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          action_plan_id?: string;
+          user_id?: string;
+          title?: string;
+          is_ai_suggested?: boolean;
+          is_completed?: boolean;
+          completed_at?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "action_plan_items_action_plan_id_fkey";
+            columns: ["action_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "action_plans";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      message_feedback: {
+        Row: {
+          id: string;
+          message_id: string;
+          user_id: string;
+          rating: -1 | 1;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          user_id: string;
+          rating: -1 | 1;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          message_id?: string;
+          user_id?: string;
+          rating?: -1 | 1;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "message_feedback_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "messages";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      assessment_templates: {
+        Row: {
+          id: string;
+          slug: string;
+          title: string;
+          description: string;
+          schema: Json;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          title: string;
+          description: string;
+          schema: Json;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          title?: string;
+          description?: string;
+          schema?: Json;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      assessment_responses: {
+        Row: {
+          id: string;
+          user_id: string;
+          template_id: string;
+          answers: Json;
+          submitted_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          template_id: string;
+          answers: Json;
+          submitted_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          template_id?: string;
+          answers?: Json;
+          submitted_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assessment_responses_template_id_fkey";
+            columns: ["template_id"];
+            isOneToOne: false;
+            referencedRelation: "assessment_templates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      assessment_scores: {
+        Row: {
+          id: string;
+          response_id: string;
+          user_id: string;
+          scores: Json;
+          narrative_summary: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          response_id: string;
+          user_id: string;
+          scores: Json;
+          narrative_summary: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          response_id?: string;
+          user_id?: string;
+          scores?: Json;
+          narrative_summary?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assessment_scores_response_id_fkey";
+            columns: ["response_id"];
+            isOneToOne: true;
+            referencedRelation: "assessment_responses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      coaching_frameworks: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string;
+          framework_prompt: string;
+          applicable_goals: string[];
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description: string;
+          framework_prompt: string;
+          applicable_goals?: string[];
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          description?: string;
+          framework_prompt?: string;
+          applicable_goals?: string[];
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      coaching_journeys: {
+        Row: {
+          id: string;
+          slug: string;
+          title: string;
+          description: string;
+          primary_goal: string | null;
+          steps: Json;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          title: string;
+          description: string;
+          primary_goal?: string | null;
+          steps: Json;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          title?: string;
+          description?: string;
+          primary_goal?: string | null;
+          steps?: Json;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_journey_progress: {
+        Row: {
+          id: string;
+          user_id: string;
+          journey_id: string;
+          current_step: number;
+          started_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          journey_id: string;
+          current_step?: number;
+          started_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          journey_id?: string;
+          current_step?: number;
+          started_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_journey_progress_journey_id_fkey";
+            columns: ["journey_id"];
+            isOneToOne: false;
+            referencedRelation: "coaching_journeys";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -510,3 +825,12 @@ export type UserMentorAssignment = Database["public"]["Tables"]["user_mentor_ass
 export type MemoryItem = Database["public"]["Tables"]["memory_items"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
 export type ProgressSnapshot = Database["public"]["Tables"]["progress_snapshots"]["Row"];
+export type ActionPlan = Database["public"]["Tables"]["action_plans"]["Row"];
+export type ActionPlanItem = Database["public"]["Tables"]["action_plan_items"]["Row"];
+export type MessageFeedback = Database["public"]["Tables"]["message_feedback"]["Row"];
+export type AssessmentTemplate = Database["public"]["Tables"]["assessment_templates"]["Row"];
+export type AssessmentResponse = Database["public"]["Tables"]["assessment_responses"]["Row"];
+export type AssessmentScore = Database["public"]["Tables"]["assessment_scores"]["Row"];
+export type CoachingFramework = Database["public"]["Tables"]["coaching_frameworks"]["Row"];
+export type CoachingJourney = Database["public"]["Tables"]["coaching_journeys"]["Row"];
+export type UserJourneyProgress = Database["public"]["Tables"]["user_journey_progress"]["Row"];

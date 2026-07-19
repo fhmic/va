@@ -1,4 +1,4 @@
-import type { Goal, MemoryItem, Mentor, Profile, UserPreferences } from "@/types/database";
+import type { CoachingFramework, Goal, MemoryItem, Mentor, Profile, UserPreferences } from "@/types/database";
 
 export interface PromptContext {
   mentor: Mentor;
@@ -6,6 +6,7 @@ export interface PromptContext {
   preferences: Pick<UserPreferences, "coaching_intensity" | "mentor_style">;
   memories: Pick<MemoryItem, "type" | "content">[];
   goals: Pick<Goal, "title" | "status">[];
+  framework?: Pick<CoachingFramework, "name" | "framework_prompt"> | null;
 }
 
 /**
@@ -29,6 +30,10 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     `Adapt your coaching intensity to "${ctx.preferences.coaching_intensity}" and your ` +
       `overall style toward "${ctx.preferences.mentor_style}", while staying in character.`,
   );
+
+  if (ctx.framework) {
+    sections.push(`Coaching framework to apply (${ctx.framework.name}): ${ctx.framework.framework_prompt}`);
+  }
 
   if (ctx.goals.length > 0) {
     const activeGoals = ctx.goals.filter((g) => g.status === "active").map((g) => g.title);

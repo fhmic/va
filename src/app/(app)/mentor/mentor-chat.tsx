@@ -3,13 +3,16 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { MessageFeedback } from "@/components/chat/message-feedback";
 import { VoiceGenderToggle } from "@/components/voice/voice-gender-toggle";
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
+import { createClient } from "@/lib/supabase/client";
 import type { UserPreferences } from "@/types/database";
 
 interface ChatMessage {
   role: "user" | "mentor";
   content: string;
+  id?: string;
 }
 
 export function MentorChat(props: {
@@ -20,6 +23,7 @@ export function MentorChat(props: {
   initialVoiceGender: UserPreferences["voice_gender"];
   voiceEnabled: boolean;
 }) {
+  const supabase = createClient();
   const [sessionId, setSessionId] = useState(props.initialSessionId);
   const [messages, setMessages] = useState<ChatMessage[]>(props.initialHistory);
   const [draft, setDraft] = useState("");
@@ -88,6 +92,8 @@ export function MentorChat(props: {
       if (props.voiceEnabled && mentorReply) {
         void playMentorReply(mentorReply);
       }
+
+      void attachMentorMessageId(sessionId ?? newSessionId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
       setMessages((prev) => {
@@ -97,6 +103,36 @@ export function MentorChat(props: {
       });
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function attachMentorMessageId(activeSessionId: string | null) {
+    if (!activeSessionId) return;
+    // persistFullReply (server-side) writes the mentor message
+    // asynchronously after this response stream ends, so there's an
+    // inherent small race — retry once after a short delay rather than
+    // failing silently on the first miss.
+    for (const delayMs of [400, 1200]) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const { data } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("session_id", activeSessionId)
+        .eq("role", "mentor")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.id) {
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (next[lastIndex] && next[lastIndex].role === "mentor" && !next[lastIndex].id) {
+            next[lastIndex] = { ...next[lastIndex], id: data.id };
+          }
+          return next;
+        });
+        return;
+      }
     }
   }
 
@@ -159,7 +195,16 @@ export function MentorChat(props: {
         {messages.length === 0 ? (
           <p className="text-sm text-slate-400">Say hello to start your first conversation.</p>
         ) : (
-          messages.map((m, i) => <MessageBubble key={i} role={m.role} content={m.content} />)
+        messages.map((m, i) => (
+          <div key={i}>
+            <MessageBubble role={m.role} content={m.content} />
+            {m.role === "mentor" && m.id ? (
+              <div className="pl-1">
+                <MessageFeedback messageId={m.id} />
+              </div>
+            ) : null}
+          </div>
+        ))
         )}
       </div>
 

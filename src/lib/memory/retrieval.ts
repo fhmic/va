@@ -13,7 +13,7 @@ const RECENCY_HALF_LIFE_DAYS = 30;
  * has an `embedding` column (migration 0014) but no embedding provider
  * is wired up (Groq doesn't offer an embeddings endpoint; no other
  * provider has been chosen). This is a documented, deliberate gap — see
- * docs/STAGE-2-NOTES.md — not an oversight. When an embedding provider
+ * docs/STAGE-2-3-4-NOTES.md — not an oversight. When an embedding provider
  * is chosen, this function is the only place that needs to change.
  *
  * Pure ranking math is separated into `rankMemories` so it's unit-

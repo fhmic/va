@@ -29,6 +29,12 @@ export function NavBar({ displayName }: { displayName: string | null }) {
             <Link href="/progress" className="text-sm text-slate-600 hover:text-slate-900">
               Progress
             </Link>
+            <Link href="/assessments" className="text-sm text-slate-600 hover:text-slate-900">
+              Assessments
+            </Link>
+            <Link href="/journeys" className="text-sm text-slate-600 hover:text-slate-900">
+              Journeys
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">

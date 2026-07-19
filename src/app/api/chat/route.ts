@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getOrAssignMentor } from "@/lib/mentor/assignment";
 import { getRelevantMemories } from "@/lib/memory/retrieval";
 import { extractMemoriesFromMessages } from "@/lib/memory/extraction";
+import { consolidateMemoriesIfNeeded } from "@/lib/memory/consolidation";
+import { pickRelevantFramework } from "@/lib/coaching/frameworks";
 import { recordActivitySnapshot } from "@/lib/progress/activity";
 import { buildSystemPrompt } from "@/lib/groq/prompts";
 import { streamChatCompletion, type GroqMessage } from "@/lib/groq/client";
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
       activeSessionId = session.id;
     }
 
-    const [{ data: profile }, { data: preferences }, { data: goals }, memories, { data: history }] =
+    const [{ data: profile }, { data: preferences }, { data: goals }, { data: frameworks }, memories, { data: history }] =
       await Promise.all([
         admin
           .from("profiles")
@@ -86,6 +88,7 @@ export async function POST(request: Request) {
           .eq("user_id", user.id)
           .single(),
         admin.from("goals").select("title, status").eq("user_id", user.id).eq("status", "active"),
+        admin.from("coaching_frameworks").select("*").eq("is_active", true),
         getRelevantMemories(admin, user.id),
         admin
           .from("messages")
@@ -110,12 +113,15 @@ export async function POST(request: Request) {
       throw new Error(`failed to persist user message: ${userMessageError.message}`);
     }
 
+    const framework = pickRelevantFramework(frameworks ?? [], profile.primary_goal);
+
     const systemPrompt = buildSystemPrompt({
       mentor,
       profile,
       preferences,
       memories,
       goals: goals ?? [],
+      framework,
     });
 
     const shortTermContext: GroqMessage[] = (history ?? [])
@@ -211,6 +217,11 @@ async function persistFullReply(params: {
         userId: params.userId,
         utilityModel: params.utilityModel,
         recentMessages: (recent ?? []).slice().reverse(),
+      });
+
+      await consolidateMemoriesIfNeeded({
+        userId: params.userId,
+        utilityModel: params.utilityModel,
       });
     }
   } catch (err) {
