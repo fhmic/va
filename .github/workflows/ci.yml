@@ -22,13 +22,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: va
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'example-anon-key' }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL || 'http://localhost:3000' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,7 +35,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: va/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -90,9 +87,6 @@ jobs:
   verify-migrations:
     name: Verify migrations apply cleanly
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: va
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -101,6 +95,8 @@ jobs:
         uses: supabase/setup-cli@v1
         with:
           version: latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Start local Supabase stack (applies every migration from scratch)
         run: supabase start
