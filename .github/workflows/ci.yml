@@ -22,6 +22,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: va
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -35,6 +38,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: va/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -86,6 +90,9 @@ jobs:
   verify-migrations:
     name: Verify migrations apply cleanly
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: va
     steps:
       - name: Checkout
         uses: actions/checkout@v4
