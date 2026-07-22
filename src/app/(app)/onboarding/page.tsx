@@ -33,17 +33,27 @@ export default async function OnboardingPage() {
   // client) rather than hardcoded in the form, so the version a user
   // actually reads/accepts always matches what's currently published
   // (migration 0007 + docs/adr/ADR-004-legal-acceptance-audit-design.md).
-  const requiredDocuments = await getRequiredLegalDocuments(supabase);
+  const [requiredDocuments, { data: industries }, { data: functionalAreas }, { data: currentRoles }] =
+    await Promise.all([
+      getRequiredLegalDocuments(supabase),
+      supabase.from("industries").select("id, name").eq("is_active", true).order("name"),
+      supabase.from("functional_areas").select("id, name").eq("is_active", true).order("name"),
+      supabase.from("current_roles").select("id, name").eq("is_active", true).order("name"),
+    ]);
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-16">
-      <h1 className="text-2xl font-semibold text-ink dark:text-white">Let&apos;s set you up</h1>
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-16">
+      <h1 className="font-display text-2xl font-medium text-ink dark:text-white">Let&apos;s set you up</h1>
       <p className="mt-1 text-sm text-ink/60 dark:text-white/60">
-        A couple of quick details before you meet your mentor.
+        A few details about your professional background — this is what lets VAM personalize your
+        mentor, scenarios, and training to your actual role, not a generic template.
       </p>
       <div className="mt-8">
         <OnboardingForm
           defaultDisplayName={profile?.display_name ?? ""}
+          industries={industries ?? []}
+          functionalAreas={functionalAreas ?? []}
+          currentRoles={currentRoles ?? []}
           requiredDocuments={requiredDocuments.map((doc) => ({
             id: doc.id,
             name: doc.name,

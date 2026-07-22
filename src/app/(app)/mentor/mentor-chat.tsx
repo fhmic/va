@@ -1,14 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { MessageFeedback } from "@/components/chat/message-feedback";
 import { VoiceGenderToggle } from "@/components/voice/voice-gender-toggle";
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
+import { useLiveConversation } from "@/hooks/use-live-conversation";
 import { createClient } from "@/lib/supabase/client";
 import { getMentorAvatar } from "@/lib/avatar/registry";
 import { WaveformBars } from "@/components/waveform/waveform-bars";
+import { TtsPlaybackQueue } from "@/lib/voice/tts-playback-queue";
+import { extractCompletedSentences, flushRemainingBuffer, initialChunkerState } from "@/lib/voice/sentence-chunker";
 import type { UserPreferences } from "@/types/database";
 
 interface ChatMessage {
@@ -17,6 +20,19 @@ interface ChatMessage {
   id?: string;
 }
 
+/**
+ * Stage 6 — Real-time duplex voice.
+ *
+ * Two voice modes coexist:
+ *  - Push-to-talk (existing, Stage 2): record on click, send on click.
+ *  - Live conversation (new): continuous mic stream, VAD auto-detects
+ *    utterances, and the user can interrupt the mentor mid-reply —
+ *    see docs/STAGE-6-VOICE-NOTES.md for the honest architecture
+ *    writeup (this is not literally continuous bidirectional audio
+ *    streaming — Groq's STT/TTS are REST endpoints, not a realtime
+ *    socket API — it's client-side VAD + barge-in + sentence-streamed
+ *    TTS layered on the existing request/response pipeline).
+ */
 export function MentorChat(props: {
   mentorSlug: string | null;
   mentorName: string;
@@ -33,31 +49,75 @@ export function MentorChat(props: {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [liveModeOn, setLiveModeOn] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsQueueRef = useRef<TtsPlaybackQueue | null>(null);
+  const chunkerStateRef = useRef(initialChunkerState);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const recorder = useVoiceRecorder();
 
-  async function send(text: string, inputMode: "text" | "voice") {
-    if (!text.trim() || isSending) return;
-    setIsSending(true);
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setDraft("");
+  useEffect(() => {
+    if (audioRef.current && !ttsQueueRef.current) {
+      ttsQueueRef.current = new TtsPlaybackQueue(audioRef.current);
+    }
+  }, []);
 
+  const liveConversation = useLiveConversation({
+    onSpeechStart: handleBargeIn,
+    onUtterance: (blob) => {
+      void transcribeAndSend(blob);
+    },
+  });
+
+  /**
+   * Barge-in: fires the instant VAD detects the user talking, whether
+   * the mentor is still generating text or already speaking it back.
+   * Aborting the fetch here propagates to the server (request.signal
+   * in /api/chat) and on to the upstream Groq call, so generation
+   * actually stops rather than just being ignored client-side.
+   */
+  function handleBargeIn() {
+    abortControllerRef.current?.abort();
+    ttsQueueRef.current?.stop();
+  }
+
+  async function transcribeAndSend(blob: Blob) {
+    const form = new FormData();
+    form.append("audio", blob, "voice-note.webm");
+    const res = await fetch("/api/voice/stt", { method: "POST", body: form });
+    if (!res.ok) {
+      setVoiceError("Could not transcribe that.");
+      return;
+    }
+    const { transcript } = await res.json();
+    if (transcript) {
+      void send(transcript, "voice");
+    }
+  }
+
+  async function streamMentorTurn(url: string, body: Record<string, unknown>) {
+    ttsQueueRef.current?.reset();
+    chunkerStateRef.current = initialChunkerState;
     let mentorReply = "";
     setMessages((prev) => [...prev, { role: "mentor", content: "" }]);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message: text, inputMode }),
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       const newSessionId = res.headers.get("X-Session-Id");
       if (newSessionId) setSessionId(newSessionId);
 
       if (!res.ok || !res.body) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error?.message ?? "The mentor is temporarily unavailable.");
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error?.message ?? "The mentor is temporarily unavailable.");
       }
 
       const reader = res.body.getReader();
@@ -86,6 +146,17 @@ export function MentorChat(props: {
                 next[next.length - 1] = { role: "mentor", content: mentorReply };
                 return next;
               });
+
+              if (props.voiceEnabled) {
+                const { newSentences, nextState } = extractCompletedSentences(
+                  mentorReply,
+                  chunkerStateRef.current,
+                );
+                chunkerStateRef.current = nextState;
+                for (const sentence of newSentences) {
+                  ttsQueueRef.current?.enqueue(sentence);
+                }
+              }
             }
           } catch {
             // Ignore malformed SSE chunks.
@@ -93,22 +164,60 @@ export function MentorChat(props: {
         }
       }
 
-      if (props.voiceEnabled && mentorReply) {
-        void playMentorReply(mentorReply);
+      if (props.voiceEnabled) {
+        const trailing = flushRemainingBuffer(chunkerStateRef.current);
+        if (trailing) ttsQueueRef.current?.enqueue(trailing);
       }
 
       void attachMentorMessageId(sessionId ?? newSessionId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong.";
-      setMessages((prev) => {
-        const next = [...prev];
-        next[next.length - 1] = { role: "mentor", content: `(${message})` };
-        return next;
-      });
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      if (!isAbort) {
+        const message = err instanceof Error ? err.message : "Something went wrong.";
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "mentor", content: `(${message})` };
+          return next;
+        });
+      }
+      // An abort means the user interrupted on purpose (barge-in) —
+      // leave whatever partial reply was already shown, no error banner.
     } finally {
       setIsSending(false);
+      if (liveModeOn) liveConversation.resumeListening();
     }
   }
+
+  async function send(text: string, inputMode: "text" | "voice") {
+    if (!text.trim() || isSending) return;
+    setIsSending(true);
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setDraft("");
+    await streamMentorTurn("/api/chat", { sessionId, message: text, inputMode });
+  }
+
+  /**
+   * Product Redefinition — Mentor Redefinition, proactive opening.
+   * Called once on mount when this is a brand-new (zero-message)
+   * session — the mentor speaks first, per the brief's requirement
+   * that VA never wait passively to be asked "what can I help with".
+   * No user message bubble is added; /api/chat/greet doesn't persist
+   * one either (see that route's docstring).
+   */
+  async function triggerGreeting() {
+    if (isSending) return;
+    setIsSending(true);
+    await streamMentorTurn("/api/chat/greet", { sessionId });
+  }
+
+  useEffect(() => {
+    if (props.initialHistory.length === 0) {
+      void triggerGreeting();
+    }
+    // Intentionally mount-only — this greets once when the session
+    // starts empty, not every time some unrelated prop changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function attachMentorMessageId(activeSessionId: string | null) {
     if (!activeSessionId) return;
@@ -140,26 +249,6 @@ export function MentorChat(props: {
     }
   }
 
-  async function playMentorReply(text: string) {
-    try {
-      const res = await fetch("/api/voice/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      if (audioRef.current) {
-        audioRef.current.src = url;
-        await audioRef.current.play().catch(() => undefined);
-      }
-    } catch {
-      // Voice playback is additive — a failure here should not disrupt
-      // the text conversation already shown.
-    }
-  }
-
   async function handleMicClick() {
     setVoiceError(null);
     if (recorder.state === "idle") {
@@ -170,20 +259,27 @@ export function MentorChat(props: {
     if (recorder.state === "recording") {
       const blob = await recorder.stop();
       if (!blob) return;
-
-      const form = new FormData();
-      form.append("audio", blob, "voice-note.webm");
-      const res = await fetch("/api/voice/stt", { method: "POST", body: form });
-      if (!res.ok) {
-        setVoiceError("Could not transcribe that. Please try typing instead.");
-        return;
-      }
-      const { transcript } = await res.json();
-      if (transcript) {
-        void send(transcript, "voice");
-      }
+      void transcribeAndSend(blob);
     }
   }
+
+  function toggleLiveMode() {
+    if (liveModeOn) {
+      liveConversation.stop();
+      setLiveModeOn(false);
+    } else {
+      setVoiceError(null);
+      void liveConversation.start();
+      setLiveModeOn(true);
+    }
+  }
+
+  const liveStateLabel: Record<string, string> = {
+    idle: "",
+    listening: "Listening…",
+    "user-speaking": "Hearing you…",
+    processing: "Thinking…",
+  };
 
   return (
     <div className="flex h-[calc(100vh-9rem)] flex-col">
@@ -193,7 +289,12 @@ export function MentorChat(props: {
           <div>
             <h1 className="font-display text-xl font-medium text-ink dark:text-white">{props.mentorName}</h1>
             {props.mentorTagline ? <p className="text-sm text-ink/60 dark:text-white/60">{props.mentorTagline}</p> : null}
-            <WaveformBars active={isSending} className="mt-1 h-3" />
+            <div className="mt-1 flex items-center gap-2">
+              <WaveformBars active={isSending || liveConversation.state === "user-speaking"} className="h-3" />
+              {liveModeOn ? (
+                <span className="text-xs text-current-500">{liveStateLabel[liveConversation.state]}</span>
+              ) : null}
+            </div>
           </div>
         </div>
         <VoiceGenderToggle initialValue={props.initialVoiceGender} />
@@ -201,7 +302,7 @@ export function MentorChat(props: {
 
       <div className="flex-1 space-y-3 overflow-y-auto py-2">
         {messages.length === 0 ? (
-          <p className="text-sm text-ink/40 dark:text-white/40">Say hello to start your first conversation.</p>
+          <p className="text-sm text-ink/40 dark:text-white/40">Your mentor is getting started…</p>
         ) : (
         messages.map((m, i) => (
           <div key={i}>
@@ -217,6 +318,7 @@ export function MentorChat(props: {
       </div>
 
       {voiceError ? <p className="mb-2 text-xs text-red-600">{voiceError}</p> : null}
+      {liveConversation.error ? <p className="mb-2 text-xs text-red-600">{liveConversation.error}</p> : null}
 
       <form
         onSubmit={(e) => {
@@ -241,12 +343,21 @@ export function MentorChat(props: {
         />
         <Button
           type="button"
+          variant={liveModeOn ? "primary" : "secondary"}
+          onClick={toggleLiveMode}
+          title="Hands-free live conversation — auto-detects when you talk, and you can interrupt the mentor"
+        >
+          {liveModeOn ? "End live" : "Go live"}
+        </Button>
+        <Button
+          type="button"
           variant={recorder.state === "recording" ? "primary" : "secondary"}
           onClick={handleMicClick}
+          disabled={liveModeOn}
         >
           {recorder.state === "recording" ? "Stop" : "🎙"}
         </Button>
-        <Button type="submit" isLoading={isSending}>
+        <Button type="submit" isLoading={isSending} disabled={liveModeOn}>
           Send
         </Button>
       </form>

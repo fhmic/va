@@ -46,8 +46,8 @@ export default function UpdatePasswordPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4 py-16">
-      <h1 className="text-2xl font-semibold text-slate-900">Choose a new password</h1>
-      <p className="mt-1 text-sm text-slate-500">Create a strong password for your account.</p>
+      <h1 className="text-2xl font-semibold text-ink dark:text-white">Choose a new password</h1>
+      <p className="mt-1 text-sm text-ink/60 dark:text-white/60">Create a strong password for your account.</p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         {error ? <FormAlert tone="error" message={error} /> : null}

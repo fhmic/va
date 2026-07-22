@@ -41,6 +41,7 @@ export async function streamChatCompletion(params: {
   model: string;
   messages: GroqMessage[];
   temperature?: number;
+  signal?: AbortSignal;
 }): Promise<Response> {
   const response = await fetch(`${GROQ_API_BASE}/chat/completions`, {
     method: "POST",
@@ -54,6 +55,7 @@ export async function streamChatCompletion(params: {
       temperature: params.temperature ?? 0.7,
       stream: true,
     }),
+    signal: params.signal,
   });
 
   if (!response.ok || !response.body) {

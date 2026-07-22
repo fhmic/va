@@ -3,12 +3,8 @@ import { z } from "zod";
 import { verifyAuthenticatedUser } from "@/lib/supabase/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOrAssignMentor } from "@/lib/mentor/assignment";
-import { getRelevantMemories } from "@/lib/memory/retrieval";
-import { extractMemoriesFromMessages } from "@/lib/memory/extraction";
-import { consolidateMemoriesIfNeeded } from "@/lib/memory/consolidation";
-import { pickRelevantFramework } from "@/lib/coaching/frameworks";
-import { recordActivitySnapshot } from "@/lib/progress/activity";
-import { buildSystemPrompt } from "@/lib/groq/prompts";
+import { loadSystemPrompt } from "@/lib/chat/prompt-context";
+import { persistMentorReply } from "@/lib/chat/persist-reply";
 import { streamChatCompletion, type GroqMessage } from "@/lib/groq/client";
 
 const bodySchema = z.object({
@@ -18,7 +14,6 @@ const bodySchema = z.object({
 });
 
 const SHORT_TERM_CONTEXT_MESSAGES = 20;
-const MEMORY_EXTRACTION_TRIGGER_EVERY_N_MESSAGES = 6;
 
 /**
  * Stage 2.3 — Groq Integration / Stage 2.1 — Mentor Domain Model.
@@ -33,6 +28,10 @@ const MEMORY_EXTRACTION_TRIGGER_EVERY_N_MESSAGES = 6;
  *
  * A null sessionId creates a new conversation_session, assigning a
  * mentor via getOrAssignMentor() if the user doesn't have one yet.
+ *
+ * See /api/chat/greet/route.ts for the proactive-opening counterpart
+ * (Product Redefinition — Mentor Redefinition) — this route always
+ * expects a real user message; greet never does.
  */
 export async function POST(request: Request) {
   const auth = await verifyAuthenticatedUser();
@@ -75,32 +74,15 @@ export async function POST(request: Request) {
       activeSessionId = session.id;
     }
 
-    const [{ data: profile }, { data: preferences }, { data: goals }, { data: frameworks }, memories, { data: history }] =
-      await Promise.all([
-        admin
-          .from("profiles")
-          .select("display_name, primary_goal, experience_level")
-          .eq("id", user.id)
-          .single(),
-        admin
-          .from("user_preferences")
-          .select("coaching_intensity, mentor_style")
-          .eq("user_id", user.id)
-          .single(),
-        admin.from("goals").select("title, status").eq("user_id", user.id).eq("status", "active"),
-        admin.from("coaching_frameworks").select("*").eq("is_active", true),
-        getRelevantMemories(admin, user.id),
-        admin
-          .from("messages")
-          .select("role, content")
-          .eq("session_id", activeSessionId)
-          .order("created_at", { ascending: false })
-          .limit(SHORT_TERM_CONTEXT_MESSAGES),
-      ]);
-
-    if (!profile || !preferences) {
-      throw new Error("failed to load profile/preferences for prompt assembly");
-    }
+    const [systemPrompt, { data: history }] = await Promise.all([
+      loadSystemPrompt(admin, user.id, mentor),
+      admin
+        .from("messages")
+        .select("role, content")
+        .eq("session_id", activeSessionId)
+        .order("created_at", { ascending: false })
+        .limit(SHORT_TERM_CONTEXT_MESSAGES),
+    ]);
 
     const { error: userMessageError } = await admin.from("messages").insert({
       session_id: activeSessionId,
@@ -112,17 +94,6 @@ export async function POST(request: Request) {
     if (userMessageError) {
       throw new Error(`failed to persist user message: ${userMessageError.message}`);
     }
-
-    const framework = pickRelevantFramework(frameworks ?? [], profile.primary_goal);
-
-    const systemPrompt = buildSystemPrompt({
-      mentor,
-      profile,
-      preferences,
-      memories,
-      goals: goals ?? [],
-      framework,
-    });
 
     const shortTermContext: GroqMessage[] = (history ?? [])
       .slice()
@@ -139,6 +110,12 @@ export async function POST(request: Request) {
         ...shortTermContext,
         { role: "user", content: message },
       ],
+      // Stage 6 barge-in: if the client aborts this fetch (user started
+      // talking over the mentor), that cancellation propagates here and
+      // actually stops the upstream Groq generation, rather than just
+      // the client ignoring a reply that's still being generated and
+      // billed for server-side.
+      signal: request.signal,
     });
 
     // Tee the upstream stream: one branch goes to the client immediately,
@@ -146,7 +123,7 @@ export async function POST(request: Request) {
     // persisted once streaming completes.
     const [clientStream, persistStream] = groqResponse.body!.tee();
 
-    void persistFullReply({
+    void persistMentorReply({
       admin,
       sessionId: activeSessionId,
       userId: user.id,
@@ -171,94 +148,4 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: { code: "UPSTREAM_ERROR", message } }, { status: 502 });
   }
-}
-
-/**
- * Buffers the Groq SSE stream to reconstruct the full assistant reply,
- * persists it, then (every N messages) triggers memory extraction.
- * Runs after the response has already been returned to the client —
- * failures here are logged, never surfaced to the user, per
- * extractMemoriesFromMessages's documented contract.
- */
-async function persistFullReply(params: {
-  admin: ReturnType<typeof createAdminClient>;
-  sessionId: string;
-  userId: string;
-  utilityModel: string;
-  stream: ReadableStream<Uint8Array>;
-}) {
-  try {
-    const text = await readGroqSseText(params.stream);
-    if (!text) return;
-
-    await params.admin.from("messages").insert({
-      session_id: params.sessionId,
-      user_id: params.userId,
-      role: "mentor",
-      content: text,
-    });
-
-    await recordActivitySnapshot(params.userId);
-
-    const { count } = await params.admin
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", params.sessionId);
-
-    if (count && count % MEMORY_EXTRACTION_TRIGGER_EVERY_N_MESSAGES === 0) {
-      const { data: recent } = await params.admin
-        .from("messages")
-        .select("role, content")
-        .eq("session_id", params.sessionId)
-        .order("created_at", { ascending: false })
-        .limit(MEMORY_EXTRACTION_TRIGGER_EVERY_N_MESSAGES);
-
-      await extractMemoriesFromMessages({
-        userId: params.userId,
-        utilityModel: params.utilityModel,
-        recentMessages: (recent ?? []).slice().reverse(),
-      });
-
-      await consolidateMemoriesIfNeeded({
-        userId: params.userId,
-        utilityModel: params.utilityModel,
-      });
-    }
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("persistFullReply failed:", err);
-  }
-}
-
-/** Parses Groq's `data: {...}` SSE chunks and concatenates the delta text. */
-async function readGroqSseText(stream: ReadableStream<Uint8Array>): Promise<string> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let full = "";
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice("data:".length).trim();
-      if (payload === "[DONE]") continue;
-      try {
-        const json = JSON.parse(payload);
-        const delta: string | undefined = json?.choices?.[0]?.delta?.content;
-        if (delta) full += delta;
-      } catch {
-        // Ignore malformed SSE chunks rather than failing the whole read.
-      }
-    }
-  }
-
-  return full;
 }

@@ -1,8 +1,7 @@
 import type { Mentor, Profile, UserPreferences } from "@/types/database";
 
 export interface MatchInput {
-  profession: Profile["profession"];
-  experienceLevel: Profile["experience_level"];
+  careerLevel: Profile["career_level"];
   primaryGoal: Profile["primary_goal"];
   mentorStyle: UserPreferences["mentor_style"];
   coachingIntensity: UserPreferences["coaching_intensity"];

@@ -50,7 +50,7 @@ export async function assignMentor(userId: string): Promise<Mentor> {
   ] = await Promise.all([
     admin
       .from("profiles")
-      .select("profession, experience_level, primary_goal")
+      .select("career_level, primary_goal")
       .eq("id", userId)
       .single(),
     admin
@@ -74,8 +74,7 @@ export async function assignMentor(userId: string): Promise<Mentor> {
   }
 
   const match = pickBestMentor(mentors, {
-    profession: profile.profession,
-    experienceLevel: profile.experience_level,
+    careerLevel: profile.career_level,
     primaryGoal: profile.primary_goal,
     mentorStyle: preferences.mentor_style,
     coachingIntensity: preferences.coaching_intensity,

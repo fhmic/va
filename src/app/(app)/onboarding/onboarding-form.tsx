@@ -8,20 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormAlert } from "@/components/ui/form-alert";
 import { LEGAL_SLUG_ROUTES } from "@/lib/legal/routes";
+import { CAREER_LEVELS, COUNTRIES } from "@/lib/onboarding/constants";
 
 const TIMEZONES = Intl.supportedValuesOf ? Intl.supportedValuesOf("timeZone") : ["UTC"];
-
-const PROFESSIONS = [
-  "Student",
-  "Professional",
-  "Manager",
-  "Executive",
-  "Founder",
-  "Consultant",
-  "Job Seeker",
-] as const;
-
-const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
 
 const PRIMARY_GOALS = [
   "Improve Confidence",
@@ -39,11 +28,28 @@ interface RequiredDocument {
   slug: string;
 }
 
+interface ReferenceOption {
+  id: string;
+  name: string;
+}
+
+/** Shared select styling — kept as one constant so every dropdown stays visually consistent. */
+const SELECT_CLASSNAME =
+  "h-11 w-full rounded-xl border border-ink/10 dark:border-white/10 px-3 text-sm outline-none " +
+  "focus:border-signal-500 focus:ring-2 focus:ring-signal-500/30 bg-white dark:bg-ink-soft " +
+  "text-ink dark:text-white";
+
 export function OnboardingForm({
   defaultDisplayName,
+  industries,
+  functionalAreas,
+  currentRoles,
   requiredDocuments,
 }: {
   defaultDisplayName: string;
+  industries: ReferenceOption[];
+  functionalAreas: ReferenceOption[];
+  currentRoles: ReferenceOption[];
   requiredDocuments: RequiredDocument[];
 }) {
   const router = useRouter();
@@ -51,8 +57,12 @@ export function OnboardingForm({
   const [timezone, setTimezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   );
-  const [profession, setProfession] = useState<string>("");
-  const [experienceLevel, setExperienceLevel] = useState<string>("");
+  const [country, setCountry] = useState<string>("");
+  const [organizationName, setOrganizationName] = useState("");
+  const [industryId, setIndustryId] = useState<string>("");
+  const [functionalAreaId, setFunctionalAreaId] = useState<string>("");
+  const [currentRoleId, setCurrentRoleId] = useState<string>("");
+  const [careerLevel, setCareerLevel] = useState<string>("");
   const [primaryGoal, setPrimaryGoal] = useState<string>("");
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,8 +85,12 @@ export function OnboardingForm({
       body: JSON.stringify({
         displayName,
         timezone,
-        profession: profession || undefined,
-        experienceLevel: experienceLevel || undefined,
+        country: country || undefined,
+        organizationName: organizationName || undefined,
+        industryId: industryId || undefined,
+        functionalAreaId: functionalAreaId || undefined,
+        currentRoleId: currentRoleId || undefined,
+        careerLevel: careerLevel || undefined,
         primaryGoal: primaryGoal || undefined,
         acceptedDocumentIds: requiredDocuments.map((doc) => doc.id),
       }),
@@ -99,7 +113,7 @@ export function OnboardingForm({
       {error ? <FormAlert tone="error" message={error} /> : null}
 
       <div>
-        <Label htmlFor="displayName">What should your mentor call you?</Label>
+        <Label htmlFor="displayName">Full name</Label>
         <Input
           id="displayName"
           value={displayName}
@@ -109,52 +123,113 @@ export function OnboardingForm({
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="country">Country</Label>
+          <select
+            id="country"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            className={SELECT_CLASSNAME}
+          >
+            <option value="">Prefer not to say</option>
+            {COUNTRIES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="timezone">Timezone</Label>
+          <select
+            id="timezone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className={SELECT_CLASSNAME}
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div>
-        <Label htmlFor="timezone">Timezone</Label>
+        <Label htmlFor="organizationName">Organization</Label>
+        <Input
+          id="organizationName"
+          value={organizationName}
+          onChange={(e) => setOrganizationName(e.target.value)}
+          placeholder="e.g. Acme Bank"
+          maxLength={160}
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="industry">Industry</Label>
         <select
-          id="timezone"
-          value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
-          className="h-11 w-full rounded-xl border border-ink/10 dark:border-white/10 px-3 text-sm outline-none
-            focus:border-signal-500 focus:ring-2 focus:ring-signal-500/30"
+          id="industry"
+          value={industryId}
+          onChange={(e) => setIndustryId(e.target.value)}
+          className={SELECT_CLASSNAME}
         >
-          {TIMEZONES.map((tz) => (
-            <option key={tz} value={tz}>
-              {tz}
+          <option value="">Prefer not to say</option>
+          {industries.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
             </option>
           ))}
         </select>
       </div>
 
-      <div>
-        <Label htmlFor="profession">Which best describes you?</Label>
-        <select
-          id="profession"
-          value={profession}
-          onChange={(e) => setProfession(e.target.value)}
-          className="h-11 w-full rounded-xl border border-ink/10 dark:border-white/10 px-3 text-sm outline-none
-            focus:border-signal-500 focus:ring-2 focus:ring-signal-500/30"
-        >
-          <option value="">Prefer not to say</option>
-          {PROFESSIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="functionalArea">Functional area</Label>
+          <select
+            id="functionalArea"
+            value={functionalAreaId}
+            onChange={(e) => setFunctionalAreaId(e.target.value)}
+            className={SELECT_CLASSNAME}
+          >
+            <option value="">Prefer not to say</option>
+            {functionalAreas.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="currentRole">Current role</Label>
+          <select
+            id="currentRole"
+            value={currentRoleId}
+            onChange={(e) => setCurrentRoleId(e.target.value)}
+            className={SELECT_CLASSNAME}
+          >
+            <option value="">Prefer not to say</option>
+            {currentRoles.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
-        <Label htmlFor="experienceLevel">Communication experience level</Label>
+        <Label htmlFor="careerLevel">Career level</Label>
         <select
-          id="experienceLevel"
-          value={experienceLevel}
-          onChange={(e) => setExperienceLevel(e.target.value)}
-          className="h-11 w-full rounded-xl border border-ink/10 dark:border-white/10 px-3 text-sm outline-none
-            focus:border-signal-500 focus:ring-2 focus:ring-signal-500/30"
+          id="careerLevel"
+          value={careerLevel}
+          onChange={(e) => setCareerLevel(e.target.value)}
+          className={SELECT_CLASSNAME}
         >
           <option value="">Prefer not to say</option>
-          {EXPERIENCE_LEVELS.map((option) => (
+          {CAREER_LEVELS.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -168,8 +243,7 @@ export function OnboardingForm({
           id="primaryGoal"
           value={primaryGoal}
           onChange={(e) => setPrimaryGoal(e.target.value)}
-          className="h-11 w-full rounded-xl border border-ink/10 dark:border-white/10 px-3 text-sm outline-none
-            focus:border-signal-500 focus:ring-2 focus:ring-signal-500/30"
+          className={SELECT_CLASSNAME}
         >
           <option value="">Prefer not to say</option>
           {PRIMARY_GOALS.map((option) => (
