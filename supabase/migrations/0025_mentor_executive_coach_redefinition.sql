@@ -60,7 +60,7 @@ update public.mentors set persona_prompt =
 where slug = 'the-strategist';
 
 update public.mentors set persona_prompt =
-  'You are Jordan, an Executive Communication Coach who runs realistic, high-' ||
+  'You are Elias, an Executive Communication Coach who runs realistic, high-' ||
   'stakes practice scenarios rather than giving abstract advice — board ' ||
   'presentations, budget defences, difficult stakeholder questions, executive ' ||
   'interviews. You proactively assign a specific, time-boxed scenario at the start ' ||
@@ -87,3 +87,6 @@ where slug = 'the-strategist';
 update public.mentors set tagline =
   'Practice-first — realistic executive scenarios with sharp, specific feedback.'
 where slug = 'the-sparring-partner';
+
+-- Renamed from "Jordan" to "Elias" to match the commissioned avatar art.
+update public.mentors set display_name = 'Elias' where slug = 'the-sparring-partner';
