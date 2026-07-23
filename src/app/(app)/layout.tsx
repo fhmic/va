@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { NavBar } from "@/components/layout/navbar";
+import { LegalFooter } from "@/components/layout/legal-footer";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 
 /**
@@ -53,6 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ThemeProvider />
       <NavBar displayName={profile?.display_name ?? null} />
       <main className="mx-auto max-w-5xl px-4 py-10">{children}</main>
+      <LegalFooter />
     </div>
   );
 }

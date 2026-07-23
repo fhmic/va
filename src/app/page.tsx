@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { LegalFooter } from "@/components/layout/legal-footer";
 import { WaveformBars } from "@/components/waveform/waveform-bars";
 import { AvatarAva, AvatarElias, AvatarMorgan, AvatarNova, AvatarPriya, AvatarRiley } from "@/components/avatar/coach-avatars";
 
@@ -99,6 +100,7 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
+      <LegalFooter />
     </div>
   );
 }
